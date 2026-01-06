@@ -1,0 +1,13 @@
+[package]
+name = "git-credential-store-pathprefix"
+version = "0.1.0"
+edition = "2024"
+description = "A Git credential helper that provides different credentials based on the repo path prefix"
+repository = "https://github.com/antoniszymanski/git-credential-store-pathprefix-rs"
+license = "MPL-2.0"
+
+[dependencies]
+clap = { version = "4.5.53", features = ["derive"] }
+gitcredential = "0.1.0"
+snafu = "0.8.9"
+url = "2.5.7"
