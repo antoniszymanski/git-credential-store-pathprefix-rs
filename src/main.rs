@@ -32,7 +32,6 @@ enum Commands {
 
 #[derive(Debug, Snafu)]
 #[snafu(context(suffix(Ctx)))]
-#[non_exhaustive]
 enum Error {
     #[snafu(display("Failed to parse credential from stdin"))]
     Parse { source: gitcredential::FromReaderError },
@@ -59,7 +58,6 @@ fn main() -> Result<(), Error> {
 
 #[derive(Debug, Snafu)]
 #[snafu(context(suffix(Ctx)))]
-#[non_exhaustive]
 enum LookupError {
     #[snafu(display("Failed to get the home directory"))]
     GetHomeDir,
