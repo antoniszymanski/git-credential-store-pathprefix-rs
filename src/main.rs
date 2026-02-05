@@ -3,7 +3,7 @@
 
 use clap::{Parser, Subcommand};
 use gitcredential::GitCredential;
-use snafu::{ResultExt, Snafu};
+use snafu::{OptionExt, ResultExt, Snafu};
 use std::{
     env,
     fs::File,
@@ -59,9 +59,9 @@ fn main() -> Result<(), Error> {
 #[derive(Debug, Snafu)]
 #[snafu(context(suffix(Ctx)))]
 enum LookupError {
-    #[snafu(display("Failed to get the home directory"))]
-    GetHomeDir,
-    #[snafu(display("Failed to open .git-credentials file"))]
+    #[snafu(display("Failed to locate the .git-credentials file"))]
+    LocateGitCredentials,
+    #[snafu(display("Failed to open the .git-credentials file"))]
     OpenGitCredentials { source: io::Error, path: PathBuf },
     #[snafu(display("Failed to read line from input reader"))]
     ReadLine { source: io::Error },
@@ -70,7 +70,7 @@ enum LookupError {
 }
 
 fn lookup_credential(gc: &GitCredential) -> Result<Option<GitCredential>, LookupError> {
-    let path = env::home_dir().ok_or(LookupError::GetHomeDir)?.join(".git-credentials");
+    let path = locate_git_credentials().context(LocateGitCredentialsCtx)?;
     let file = match File::open(&path) {
         Ok(v) => v,
         Err(e) => {
@@ -102,6 +102,13 @@ fn lookup_credential(gc: &GitCredential) -> Result<Option<GitCredential>, Lookup
         return Ok(Some(GitCredential::from_url(&url)));
     }
     Ok(None)
+}
+
+fn locate_git_credentials() -> Option<PathBuf> {
+    match env::var_os("GIT_CREDENTIALS").filter(|s| !s.is_empty()) {
+        Some(path) => Some(path.into()),
+        None => env::home_dir().map(|home| home.join(".git-credentials")),
+    }
 }
 
 #[inline]
