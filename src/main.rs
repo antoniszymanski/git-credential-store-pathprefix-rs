@@ -74,10 +74,10 @@ fn lookup_credential(gc: &GitCredential) -> Result<Option<GitCredential>, Lookup
     let file = match File::open(&path) {
         Ok(v) => v,
         Err(e) => {
-            if e.kind() == io::ErrorKind::NotFound {
-                return Ok(None);
-            }
-            return Err(LookupError::OpenGitCredentials { source: e, path });
+            return match e.kind() {
+                io::ErrorKind::NotFound => Ok(None),
+                _ => Err(LookupError::OpenGitCredentials { source: e, path }),
+            };
         }
     };
     let buf_reader = BufReader::new(file);
