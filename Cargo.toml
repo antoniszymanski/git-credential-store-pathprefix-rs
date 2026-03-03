@@ -8,6 +8,6 @@ license = "MPL-2.0"
 
 [dependencies]
 clap = { version = "4.5.53", features = ["derive"] }
-gitcredential = "0.1.0"
+gitcredential = "0.1.1"
 snafu = "0.9.0"
 url = "2.5.7"
