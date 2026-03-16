@@ -73,12 +73,8 @@ fn lookup_credential(gc: &GitCredential) -> Result<Option<GitCredential>, Lookup
     let path = locate_git_credentials().context(LocateGitCredentialsCtx)?;
     let file = match File::open(&path) {
         Ok(v) => v,
-        Err(e) => {
-            return match e.kind() {
-                io::ErrorKind::NotFound => Ok(None),
-                _ => Err(LookupError::OpenGitCredentials { source: e, path }),
-            };
-        }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        e => e.context(OpenGitCredentialsCtx { path })?,
     };
     let buf_reader = BufReader::new(file);
     for line in buf_reader.lines() {
