@@ -69,10 +69,7 @@ fn lookup_credential(gc: &GitCredential) -> Result<Option<GitCredential>, Lookup
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
         e => e.context(ReadGitCredentialsCtx { path })?,
     };
-    let entries = content
-        .lines()
-        .map(|input| Url::parse(input).context(InvalidUrlCtx { input }))
-        .collect::<Result<Vec<Url>, LookupError>>()?;
+    let entries = parse_git_credentials(&content)?;
     for entry in entries {
         if gc.protocol.as_deref() != Some(entry.scheme()) && gc.host.as_deref() != entry.host_str() {
             continue;
@@ -99,6 +96,13 @@ fn locate_git_credentials() -> Option<PathBuf> {
         Some(path) => Some(path.into()),
         None => env::home_dir().map(|home| home.join(".git-credentials")),
     }
+}
+
+fn parse_git_credentials(input: &str) -> Result<Vec<Url>, LookupError> {
+    input
+        .lines()
+        .map(|input| Url::parse(input).context(InvalidUrlCtx { input }))
+        .collect()
 }
 
 #[inline]
