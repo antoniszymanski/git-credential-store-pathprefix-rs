@@ -4,7 +4,10 @@
 use clap::{Parser, Subcommand};
 use gitcredential::GitCredential;
 use snafu::{OptionExt, ResultExt, Snafu};
-use std::{env, fs, io, path::PathBuf};
+use std::{
+    env, fs, io,
+    path::{Path, PathBuf},
+};
 use url::Url;
 
 #[derive(Parser)]
@@ -29,64 +32,64 @@ enum Commands {
 #[snafu(context(suffix(Ctx)))]
 enum Error {
     #[snafu(display("Failed to parse credential from stdin"))]
-    Parse { source: gitcredential::FromReaderError },
-    #[snafu(display("Failed to lookup credential"))]
-    Lookup { source: LookupError },
+    ParseCredential { source: gitcredential::FromReaderError },
     #[snafu(display("Failed to write credential to stdout"))]
-    Write { source: io::Error },
+    WriteCredential { source: io::Error },
+    #[snafu(display("Failed to locate the .git-credentials file"))]
+    LocateCredentials,
+    #[snafu(display("Failed to read credentials from {}", path.display()))]
+    ReadCredentials { source: io::Error, path: PathBuf },
+    #[snafu(display("Failed to parse credentials from {}", path.display()))]
+    ParseCredentials { source: InvalidUrlError, path: PathBuf },
+}
+
+#[derive(Debug, Snafu)]
+#[snafu(context(suffix(Ctx)))]
+#[snafu(display("Failed to parse URL: {input:?}"))]
+struct InvalidUrlError {
+    source: url::ParseError,
+    input: String,
 }
 
 #[snafu::report]
 fn main() -> Result<(), Error> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Get => {
-            let input = GitCredential::from_reader(io::stdin()).context(ParseCtx)?;
-            if let Some(output) = lookup_credential(&input).context(LookupCtx)? {
-                output.to_writer(io::stdout()).context(WriteCtx)?;
-            }
-        }
-        Commands::Store | Commands::Erase => {}
+        Commands::Get => command_get(),
+        Commands::Store | Commands::Erase => Ok(()),
     }
-    Ok(())
 }
 
-#[derive(Debug, Snafu)]
-#[snafu(context(suffix(Ctx)))]
-enum LookupError {
-    #[snafu(display("Failed to locate the .git-credentials file"))]
-    LocateGitCredentials,
-    #[snafu(display("Failed to read the .git-credentials file"))]
-    ReadGitCredentials { source: io::Error, path: PathBuf },
-    #[snafu(display("Failed to parse URL: {input:?}"))]
-    InvalidUrl { source: url::ParseError, input: String },
-}
-
-fn lookup_credential(gc: &GitCredential) -> Result<Option<GitCredential>, LookupError> {
-    let path = locate_git_credentials().context(LocateGitCredentialsCtx)?;
-    let content = match fs::read_to_string(&path) {
+fn command_get() -> Result<(), Error> {
+    let gc = GitCredential::from_reader(io::stdin()).context(ParseCredentialCtx)?;
+    let path = &locate_credentials()?;
+    let content = match fs::read_to_string(path) {
         Ok(v) => v,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-        e => e.context(ReadGitCredentialsCtx { path })?,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        e => e.context(ReadCredentialsCtx { path })?,
     };
-    Ok(parse_git_credentials(&content)?
-        .iter()
-        .find(|entry| is_match(gc, entry))
-        .map(GitCredential::from_url))
+    parse_credentials(&content, path)?
+        .into_iter()
+        .find(|entry| is_match(&gc, entry))
+        .map(|url| GitCredential::from_url(&url))
+        .map_or_else(|| Ok(()), |gc| gc.to_writer(io::stdout()).context(WriteCredentialCtx))
 }
 
-fn locate_git_credentials() -> Option<PathBuf> {
+fn locate_credentials() -> Result<PathBuf, Error> {
     match env::var_os("GIT_CREDENTIALS").filter(|s| !s.is_empty()) {
-        Some(path) => Some(path.into()),
-        None => env::home_dir().map(|home| home.join(".git-credentials")),
+        Some(path) => Ok(path.into()),
+        None => env::home_dir()
+            .map(|home| home.join(".git-credentials"))
+            .context(LocateCredentialsCtx),
     }
 }
 
-fn parse_git_credentials(input: &str) -> Result<Vec<Url>, LookupError> {
+fn parse_credentials(input: &str, path: &Path) -> Result<Vec<Url>, Error> {
     input
         .lines()
         .map(|input| Url::parse(input).context(InvalidUrlCtx { input }))
-        .collect()
+        .collect::<Result<Vec<Url>, InvalidUrlError>>()
+        .context(ParseCredentialsCtx { path })
 }
 
 fn is_match(gc: &GitCredential, entry: &Url) -> bool {
