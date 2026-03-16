@@ -69,26 +69,10 @@ fn lookup_credential(gc: &GitCredential) -> Result<Option<GitCredential>, Lookup
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
         e => e.context(ReadGitCredentialsCtx { path })?,
     };
-    let entries = parse_git_credentials(&content)?;
-    for entry in entries {
-        if gc.protocol.as_deref() != Some(entry.scheme()) && gc.host.as_deref() != entry.host_str() {
-            continue;
-        }
-        if let (Some(expected), Some(actual)) = (
-            gc.username.as_deref(), //
-            Some(entry.username()).filter(|s| !s.is_empty()),
-        ) && expected != actual
-        {
-            continue;
-        }
-        if let (Some(expected), actual) = (gc.path.as_deref(), trim_prefix(entry.path(), "/"))
-            && !expected.starts_with(actual)
-        {
-            continue;
-        }
-        return Ok(Some(GitCredential::from_url(&entry)));
-    }
-    Ok(None)
+    Ok(parse_git_credentials(&content)?
+        .iter()
+        .find(|entry| is_match(gc, entry))
+        .map(GitCredential::from_url))
 }
 
 fn locate_git_credentials() -> Option<PathBuf> {
@@ -103,6 +87,25 @@ fn parse_git_credentials(input: &str) -> Result<Vec<Url>, LookupError> {
         .lines()
         .map(|input| Url::parse(input).context(InvalidUrlCtx { input }))
         .collect()
+}
+
+fn is_match(gc: &GitCredential, entry: &Url) -> bool {
+    if gc.protocol.as_deref() != Some(entry.scheme()) && gc.host.as_deref() != entry.host_str() {
+        return false;
+    }
+    if let (Some(expected), Some(actual)) = (
+        gc.username.as_deref(), //
+        Some(entry.username()).filter(|s| !s.is_empty()),
+    ) && expected != actual
+    {
+        return false;
+    }
+    if let (Some(expected), actual) = (gc.path.as_deref(), trim_prefix(entry.path(), "/"))
+        && !expected.starts_with(actual)
+    {
+        return false;
+    }
+    true
 }
 
 #[inline]
