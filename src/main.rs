@@ -56,7 +56,7 @@ fn main() -> Result<(), Error> {
     let cli = Cli::parse();
     match cli.command {
         Commands::Get => command_get(),
-        Commands::Store | Commands::Erase => todo!(),
+        Commands::Store | Commands::Erase => Ok(()),
     }
 }
 
