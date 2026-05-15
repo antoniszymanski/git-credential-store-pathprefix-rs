@@ -72,8 +72,7 @@ fn command_get(file: Option<PathBuf>) -> Result<(), Error> {
         None => return Ok(()),
     };
     let mut content = String::new();
-    file.read_to_string(&mut content)
-        .context(ReadCredentialsCtx { path: &path })?;
+    file.read_to_string(&mut content).context(ReadCredentialsCtx { path: &path })?;
     parse_credentials(&content, &path)?
         .into_iter()
         .find(|entry| is_match(&gc, entry))
@@ -98,9 +97,7 @@ fn open_credentials(file: Option<PathBuf>) -> Result<Option<(File, PathBuf)>, io
     }
     try_open!(
         file,
-        env::var_os("GIT_CREDENTIALS")
-            .filter(|s| !s.is_empty())
-            .map(PathBuf::from),
+        env::var_os("GIT_CREDENTIALS").filter(|s| !s.is_empty()).map(PathBuf::from),
         dirs::config_dir().map(|p| p.join("git").join("credentials.json")),
         dirs::home_dir().map(|p| p.join(".git-credentials.json"))
     );
