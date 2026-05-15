@@ -23,7 +23,10 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Return a matching credential, if any exists.
-    Get,
+    Get {
+        #[arg(long)]
+        file: Option<PathBuf>,
+    },
     /// Store the credential.
     Store,
     /// Remove matching credentials, if any, from the storage.
@@ -57,14 +60,14 @@ struct InvalidUrlError {
 fn main() -> Result<(), Error> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Get => command_get(),
+        Commands::Get { file } => command_get(file),
         Commands::Store | Commands::Erase => Ok(()),
     }
 }
 
-fn command_get() -> Result<(), Error> {
+fn command_get(file: Option<PathBuf>) -> Result<(), Error> {
     let gc = GitCredential::from_reader(io::stdin()).context(ParseCredentialCtx)?;
-    let (mut file, path) = match open_credentials().context(OpenCredentialsCtx)? {
+    let (mut file, path) = match open_credentials(file).context(OpenCredentialsCtx)? {
         Some(v) => v,
         None => return Ok(()),
     };
@@ -78,7 +81,7 @@ fn command_get() -> Result<(), Error> {
         .map_or_else(|| Ok(()), |gc| gc.to_writer(io::stdout()).context(WriteCredentialCtx))
 }
 
-fn open_credentials() -> Result<Option<(File, PathBuf)>, io::Error> {
+fn open_credentials(file: Option<PathBuf>) -> Result<Option<(File, PathBuf)>, io::Error> {
     macro_rules! try_open {
         ($($source:expr),*) => {
             $(
@@ -94,6 +97,7 @@ fn open_credentials() -> Result<Option<(File, PathBuf)>, io::Error> {
         };
     }
     try_open!(
+        file,
         env::var_os("GIT_CREDENTIALS")
             .filter(|s| !s.is_empty())
             .map(PathBuf::from),
